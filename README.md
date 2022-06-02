@@ -1,6 +1,6 @@
 # flutter-persist-sqlite
 
-A new Flutter project by Caleb following the [Persist data with SQLite](https://docs.flutter.dev/cookbook/persistence/sqlite) cookbook example on the Flutter documentation website. But implemented using [ClojureDart](https://github.com/Tensegritics/ClojureDart)..
+A new Flutter project by Caleb following the [Persist data with SQLite](https://docs.flutter.dev/cookbook/persistence/sqlite) cookbook example on the Flutter documentation website. But implemented using [ClojureDart](https://github.com/Tensegritics/ClojureDart).
 
 ## Getting Started
 
