@@ -1,0 +1,61 @@
+(ns persist-sqlite.main
+  ;; pure dart package are imported using string
+  (:require ["package:flutter/material.dart" :as m]
+            ["package:flutter/widgets.dart" :as w]
+            ["package:flutter/painting.dart" :as p]
+            ;; ["package:flutter/rendering.dart" :as r]
+            ;; ["dart:ui" :as ui]
+            ["dart:core" :as core]
+            ;; [cljd.flutter.alpha :as f]
+            ["package:path/path.dart" :as path]
+            ["package:sqflite/sqflite.dart" :as sql]))
+
+(defrecord Dog [id name age])
+
+(defn dog->string [d]
+  (str "Dog{id: " (.id d) ", "
+       "name: " (.name d) ", "
+       "age: " (.age d) "}"))
+
+(defn dog->map [d]
+  {"id" (:id d)
+   "name" (:name d)
+   "age" (:age d)})
+
+(defn database []
+  (let [dbpath (path/join (await (sql/getDatabasesPath))
+                          "doggie_database.db")]
+    (sql/openDatabase dbpath
+                      :onCreate (fn [db version]
+                                  (.execute db "CREATE TABLE dogs(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)"))
+                      :version 1)))
+
+(defn insert-dog [d]
+  (let [db (await (database))]
+    (await (.insert db "dogs" (dog->map d)
+                    :conflictAlgorithm sql.ConflictAlgorithm/replace))))
+
+(defn list-dogs []
+  (let [db (await (database))
+        maps (await (.query db "dogs"))]
+    (for [map maps]
+      (-> Dog (:id map)
+          (:name map)
+          (:age map)))))
+
+(defn main []
+  (w.WidgetsFlutterBinding/ensureInitialized)
+  (let [fido (->Dog 0 "Fido" 35)]
+    (await (insert-dog fido))
+    (core/print (await (list-dogs)))
+    #_(m/runApp
+       (m/MaterialApp
+        :title "Welcome to Flutter"
+        :home (m/Scaffold
+               :appBar (m/AppBar
+                        :title (w/Text "Welcome to ClojureDart"))
+               :body (w/Center
+                      :child (w/Text dbpath
+                                     :style (p/TextStyle
+                                             :color m.Colors/red
+                                             :fontSize 32.0))))))))

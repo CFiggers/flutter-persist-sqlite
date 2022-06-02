@@ -1,0 +1,1 @@
+{:main persist-sqlite.main, :bin "flutter"}
