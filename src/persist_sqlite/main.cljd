@@ -1,61 +1,100 @@
 (ns persist-sqlite.main
-  ;; pure dart package are imported using string
-  (:require ["package:flutter/material.dart" :as m]
-            ["package:flutter/widgets.dart" :as w]
-            ["package:flutter/painting.dart" :as p]
-            ;; ["package:flutter/rendering.dart" :as r]
-            ;; ["dart:ui" :as ui]
+  "Based on Persist data with SQLite cookbook article: "
+  (:require ["package:flutter/widgets.dart" :as w]
             ["dart:core" :as core]
-            ;; [cljd.flutter.alpha :as f]
             ["package:path/path.dart" :as path]
             ["package:sqflite/sqflite.dart" :as sql]))
 
-(defrecord Dog [id name age])
+;; Define Dog Class
+(defrecord Dog [id name age]
 
-(defn dog->string [d]
-  (str "Dog{id: " (.id d) ", "
-       "name: " (.name d) ", "
-       "age: " (.age d) "}"))
+  ;; Override default toString method
+  (^String toString [_]
+    (str "Dog{id: " id
+         " name: " name
+         " age: " age "}"))
 
-(defn dog->map [d]
-  {"id" (:id d)
-   "name" (:name d)
-   "age" (:age d)})
+  ;; Define a method for turning a Dog into a map
+  (toMap [_]
+    (-> {"id" id
+         "name" name
+         "age" age}
+        (. #/(cast String dynamic)))))
 
+;; Define a dog as a simple map
+(def fido
+  (-> {"id" 0
+       "name" "Fido"
+       "age" 35}
+      (. #/(cast String dynamic))))
+
+;; Define a dog as an instance of the Dog class 
+(def barkley
+  (-> (->Dog 1 "Barkey" 15)
+      (. #/(cast String dynamic))))
+
+;; A function for turning the map returned by database into a Dog class instance
+(defn my-map->Dog [d]
+  (->Dog (get d "id")
+         (get d "name")
+         (get d "age")))
+
+;; Function for returning a connection to the SQLite database
 (defn database []
   (let [dbpath (path/join (await (sql/getDatabasesPath))
                           "doggie_database.db")]
     (sql/openDatabase dbpath
-                      :onCreate (fn [db version]
+                      :onCreate (fn [db _]
                                   (.execute db "CREATE TABLE dogs(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)"))
                       :version 1)))
 
-(defn insert-dog [d]
+;; Function for inserting a simple map into the database
+(defn insert-dog-map [d]
   (let [db (await (database))]
-    (await (.insert db "dogs" (dog->map d)
-                    :conflictAlgorithm sql.ConflictAlgorithm/replace))))
+    (await (.insert db "dogs" d))))
 
+;; Function for inserting an instance of the Dog class into the database
+(defn insert-dog-class [d]
+  (let [db (await (database))]
+    (await (.insert db "dogs" (.toMap d)))))
+
+;; Function for updating a dog record in the database
+(defn update-dog [d]
+  (let [db (await (database))]
+    (await (.update db "dogs" d
+                    .& :where "id = ?"
+                    :whereArgs [(get d "id")]))))
+
+;; Function for querying the database for all records in the "dogs" table
 (defn list-dogs []
-  (let [db (await (database))
-        maps (await (.query db "dogs"))]
-    (for [map maps]
-      (-> Dog (:id map)
-          (:name map)
-          (:age map)))))
+  (let [db (await (database))]
+    (map my-map->Dog (await (.query db "dogs")))))
+
+;; Function for deleting all records matching ids passed as arguments (only one at a time)
+(defn delete-dogs [id]
+  (let [db (await (database))]
+    (await (. db delete "dogs"
+              .& :where "id = ?"
+              :whereArgs [id]))))
 
 (defn main []
   (w.WidgetsFlutterBinding/ensureInitialized)
-  (let [fido (->Dog 0 "Fido" 35)]
-    (await (insert-dog fido))
-    (core/print (await (list-dogs)))
-    #_(m/runApp
-       (m/MaterialApp
-        :title "Welcome to Flutter"
-        :home (m/Scaffold
-               :appBar (m/AppBar
-                        :title (w/Text "Welcome to ClojureDart"))
-               :body (w/Center
-                      :child (w/Text dbpath
-                                     :style (p/TextStyle
-                                             :color m.Colors/red
-                                             :fontSize 32.0))))))))
+
+  ;; Make sure database is empty
+  (await (delete-dogs 0))
+  (await (delete-dogs 1))
+
+  ;; Insert both dogs
+  (await (insert-dog-map fido))
+  (await (insert-dog-class barkley))
+  (core/print (await (list-dogs)))
+
+  ;; Update Fido's age
+  (await (update-dog (-> (update fido "age" #(+ 7 %))
+                         (. #/(cast String dynamic)))))
+  (core/print (await (list-dogs)))
+
+  ;; Delete records
+  (await (delete-dogs 0))
+  (await (delete-dogs 1))
+  (core/print (await (list-dogs))))
